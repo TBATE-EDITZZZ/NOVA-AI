@@ -17,6 +17,7 @@ const navigation = [
   { label: "Live intelligence", href: "/live" },
   { label: "Research", href: "/research" },
   { label: "Visual studio", href: "/visualization" },
+  { label: "Image Studio", href: "/image-studio" },
   { label: "Knowledge", href: "/knowledge" },
   { label: "Learning", href: "/learning" },
   { label: "My Library", href: "/library" },

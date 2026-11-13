@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import OpenAI from "openai";
 import { z } from "zod";
 import { publicProcedure, router } from "./_core/trpc";
 
@@ -97,11 +98,13 @@ export const novaRouter = router({
       }).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      const openaiApiKey = process.env.OPENAI_API_KEY;
+
+      if (!geminiApiKey && !openaiApiKey) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "NOVA is not configured yet. Add GEMINI_API_KEY to the project's protected environment settings.",
+          message: "NOVA AI is not configured. Add GEMINI_API_KEY or OPENAI_API_KEY to protected environment settings.",
         });
       }
       if (novaRequestWindows.size > 5000) novaRequestWindows.clear();
@@ -161,47 +164,130 @@ export const novaRouter = router({
       }
       contents.push({ role: "user", parts: userParts });
 
-      const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
-      let response: Response;
-      try {
-        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            contents,
-            generationConfig: { temperature: 0.35, maxOutputTokens: 1800 },
-          }),
-          signal: AbortSignal.timeout(45000),
-        });
-      } catch {
-        throw new TRPCError({ code: "GATEWAY_TIMEOUT", message: "NOVA could not reach Gemini just now. Your question is still here; retry when the service is available." });
+      let answer = "";
+      let usedModel = "";
+      let provider: "gemini" | "openai" = "gemini";
+
+      // PRIMARY: Gemini
+      if (geminiApiKey) {
+        try {
+          const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
+
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": geminiApiKey,
+              },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+                contents,
+                generationConfig: {
+                  temperature: 0.35,
+                  maxOutputTokens: 1800,
+                },
+              }),
+              signal: AbortSignal.timeout(45000),
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`Gemini HTTP ${response.status}`);
+          }
+
+          const body = await response.json() as {
+            candidates?: Array<{
+              content?: { parts?: Array<{ text?: string }> };
+            }>;
+          };
+
+          answer = body.candidates?.[0]?.content?.parts
+            ?.map(part => part.text ?? "")
+            .join("\n")
+            .trim() ?? "";
+
+          if (!answer) throw new Error("Gemini returned an empty answer.");
+
+          usedModel = model;
+          provider = "gemini";
+        } catch {
+          console.warn("[NOVA] Gemini failed. Trying OpenAI fallback.");
+        }
       }
-      if (!response.ok) {
-        const statusMessage = response.status === 401 || response.status === 403
-          ? "Gemini rejected the project credential or model request. Check the protected key and model access."
-          : response.status === 429
-            ? "Gemini is rate-limiting this project. Wait briefly, then retry."
-            : response.status >= 500
-              ? "Gemini is temporarily unavailable. Retry shortly."
-              : "Gemini could not process this request. Check the question and selected file.";
-        throw new TRPCError({ code: response.status === 429 ? "TOO_MANY_REQUESTS" : "BAD_GATEWAY", message: statusMessage });
+
+      // BACKUP: OpenAI
+      if (!answer && openaiApiKey) {
+        try {
+          const client = new OpenAI({ apiKey: openaiApiKey });
+          const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+
+          const openAIInput: any[] = input.history.map(item => ({
+            role: item.role,
+            content: [{ type: "input_text", text: item.text }],
+          }));
+
+          const currentContent: Array<Record<string, string>> = [
+            {
+              type: "input_text",
+              text: `${input.question}\n\n${sourceContext}`,
+            },
+          ];
+
+          if (input.attachment) {
+            const dataUrl =
+              `data:${input.attachment.mimeType};base64,${input.attachment.data}`;
+
+            if (input.attachment.mimeType === "application/pdf") {
+              currentContent.push({
+                type: "input_file",
+                file_data: dataUrl,
+                filename: input.attachment.name,
+              });
+            } else {
+              currentContent.push({
+                type: "input_image",
+                image_url: dataUrl,
+                detail: "auto",
+              });
+            }
+          }
+
+          openAIInput.push({
+            role: "user",
+            content: currentContent,
+          });
+
+          const response = await client.responses.create({
+            model,
+            instructions: systemInstruction,
+            input: openAIInput as any,
+            max_output_tokens: 1800,
+          });
+
+          answer = response.output_text?.trim() ?? "";
+
+          if (!answer) throw new Error("OpenAI returned an empty answer.");
+
+          usedModel = model;
+          provider = "openai";
+        } catch {
+          console.error("[NOVA] OpenAI fallback also failed.");
+        }
       }
-      const body = (await response.json()) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
-        promptFeedback?: { blockReason?: string };
-      };
-      const answer = body.candidates?.[0]?.content?.parts?.map(part => part.text ?? "").join("\n").trim();
+
       if (!answer) {
-        const blocked = body.promptFeedback?.blockReason;
         throw new TRPCError({
           code: "BAD_GATEWAY",
-          message: blocked ? `Gemini did not return an answer because the request was blocked (${blocked}).` : "Gemini returned no answer. Your question has not been marked complete; try again with a clearer prompt.",
+          message: "NOVA AI providers are currently unavailable. Check your Gemini and OpenAI configuration, model access, and API usage limits.",
         });
       }
+
       return {
         answer,
-        model,
+        model: usedModel,
+        provider,
         sources,
         researchStatus: input.mode === "quick" || input.mode === "eli10" || input.mode === "expert" || input.mode === "step"
           ? "not_requested" as const

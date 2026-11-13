@@ -10,6 +10,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 
 const Home = lazy(() => import("@/pages/Home"));
 const NOVA = lazy(() => import("@/pages/NOVA"));
+const ImageStudio = lazy(() => import("@/pages/ImageStudio"));
 const Explorer = lazy(() => import("@/pages/Explorer"));
 const LiveIntelligence = lazy(() => import("@/pages/LiveIntelligence"));
 const Laboratory = lazy(() => import("@/pages/Laboratory"));
@@ -47,6 +48,7 @@ function Router() {
             <Switch>
               <Route path="/" component={Home} />
               <Route path="/nova" component={NOVA} />
+                  <Route path="/image-studio" component={ImageStudio} />
               <Route path="/discoveries" component={Research} />
               <Route path="/explorer" component={Explorer} />
               <Route path="/laboratory" component={Laboratory} />

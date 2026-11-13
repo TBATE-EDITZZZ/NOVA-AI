@@ -8,6 +8,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { novaRouter, scienceRouter } from "./science";
+import { imageRouter } from "./image";
 
 const savedSourceInput = z.object({
   title: z.string().trim().min(1).max(500),
@@ -75,6 +76,7 @@ export const appRouter = router({
     }),
   }),
   nova: novaRouter,
+  image: imageRouter,
   science: scienceRouter,
   workspace: workspaceRouter,
 });

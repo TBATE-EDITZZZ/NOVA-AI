@@ -896,3 +896,95 @@ a { color: inherit; }
   .primary-nav.is-open { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
   .nav-link,.nav-nova { justify-content:flex-start; min-height:38px; margin:0; padding-inline:11px; font-size:10px; }
 }
+
+/* NOVA responsive refinements — preserves existing design */
+@media (max-width:760px) {
+  .app-frame,
+  .workspace-page,
+  .nova-page,
+  .nova-conversation,
+  .conversation-scroll,
+  .message-list,
+  .chat-message,
+  .composer-wrap,
+  .nova-composer {
+    min-width:0;
+  }
+
+  .chat-message > * {
+    min-width:0;
+  }
+
+  .workspace-heading {
+    align-items:flex-start;
+    flex-wrap:wrap;
+  }
+
+  .workspace-heading > * {
+    min-width:0;
+  }
+
+  .workspace-actions,
+  .nova-composer,
+  .composer-left {
+    max-width:100%;
+    flex-wrap:wrap;
+  }
+
+  .composer-left {
+    min-width:0;
+  }
+
+  .library-toolbar,
+  .library-record-top,
+  .library-record-actions,
+  .lesson-actions,
+  .flashcard-controls {
+    flex-wrap:wrap;
+  }
+
+  .library-record-date {
+    margin-left:0;
+  }
+
+  .level-switcher {
+    max-width:100%;
+    overflow-x:auto;
+  }
+
+  .library-gate {
+    width:calc(100% - 28px);
+  }
+
+  .library-question,
+  .library-answer-body {
+    overflow-wrap:anywhere;
+  }
+}
+
+@media (max-width:480px) {
+  .workspace-page {
+    width:calc(100% - 24px);
+  }
+
+  .workspace-actions {
+    gap:6px;
+  }
+
+  .library-gate {
+    padding:22px 16px;
+  }
+
+  .library-record {
+    min-width:0;
+  }
+
+  .quiz-card,
+  .flashcard-card {
+    min-width:0;
+  }
+
+  .flashcard-controls button {
+    min-height:36px;
+  }
+}

@@ -754,12 +754,12 @@ a { color: inherit; }
   .result-source-pill { display:table; margin:5px 0 0; }
   .result-copy h2 { font-size:12px; }
   .workspace-page { width:calc(100% - 34px); padding-top:30px; }
-  .nova-page { grid-template-columns:1fr; gap:10px; }
-  .workspace-rail { position:static; min-height:0; display:block; padding:0 0 10px; border-right:0; border-bottom:1px solid var(--line); }
+  .nova-page { grid-template-columns:minmax(0,1fr); gap:10px; }
+  .workspace-rail { position:static; min-width:0; width:100%; max-width:100%; min-height:0; display:block; padding:0 0 10px; border-right:0; border-bottom:1px solid var(--line); }
   .rail-topline { display:none; }
   .new-research-button { width:100%; margin:0; }
   .rail-caption { margin:11px 0 6px; }
-  .mode-list { display:flex; gap:5px; overflow:auto; padding:0 0 4px; }
+  .mode-list { display:flex; min-width:0; max-width:100%; gap:5px; overflow-x:auto; overflow-y:hidden; padding:0 0 4px; }
   .mode-option { flex:0 0 auto; min-height:30px; padding:0 8px; border:1px solid var(--line); white-space:nowrap; }
   .mode-description,.rail-bottom { display:none; }
   .workspace-heading h1 { font-size:29px; }

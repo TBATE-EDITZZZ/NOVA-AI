@@ -991,7 +991,6 @@ a { color: inherit; }
 
 /* NOVA mobile chat layout fix */
 @media (max-width:760px) {
-  .nova-page,
   .nova-conversation,
   .conversation-scroll,
   .nova-empty-state,

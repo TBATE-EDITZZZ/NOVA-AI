@@ -27,12 +27,25 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [path] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [introOpen, setIntroOpen] = useState(true);
+  const [introOpen, setIntroOpen] = useState(() => {
+    try {
+      return window.sessionStorage.getItem("nova-intro-seen") !== "1";
+    } catch {
+      return true;
+    }
+  });
   const { theme, toggleTheme } = useTheme();
   const { user, loading, logout } = useAuth();
   const { soundEnabled, toggleSound } = useInteractionEffects();
   const initials = user?.name?.trim()?.slice(0, 1).toUpperCase() || "";
-  const dismissIntro = useCallback(() => setIntroOpen(false), []);
+  const dismissIntro = useCallback(() => {
+    try {
+      window.sessionStorage.setItem("nova-intro-seen", "1");
+    } catch {
+      // Continue if session storage is unavailable.
+    }
+    setIntroOpen(false);
+  }, []);
 
   return (
     <div className="app-frame">

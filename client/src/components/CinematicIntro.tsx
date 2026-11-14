@@ -17,7 +17,6 @@ export default function CinematicIntro({ onDismiss }: CinematicIntroProps) {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    const dismissTimer = window.setTimeout(onDismiss, reducedMotion ? 1800 : 3100);
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -32,7 +31,6 @@ export default function CinematicIntro({ onDismiss }: CinematicIntroProps) {
     enterButton.current?.focus({ preventScroll: true });
 
     return () => {
-      window.clearTimeout(dismissTimer);
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };

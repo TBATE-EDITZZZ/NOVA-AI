@@ -988,3 +988,143 @@ a { color: inherit; }
     min-height:36px;
   }
 }
+
+/* NOVA mobile chat layout fix */
+@media (max-width:760px) {
+  .nova-page,
+  .nova-conversation,
+  .conversation-scroll,
+  .nova-empty-state,
+  .message-list,
+  .chat-message,
+  .message-main,
+  .composer-wrap,
+  .nova-composer {
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    box-sizing:border-box;
+  }
+
+  .workspace-heading {
+    align-items:flex-start;
+    flex-wrap:wrap;
+  }
+
+  .workspace-heading > div:first-child {
+    flex:1 1 100%;
+    min-width:0;
+  }
+
+  .workspace-heading .section-kicker {
+    overflow-wrap:anywhere;
+    line-height:1.7;
+  }
+
+  .nova-empty-state h2 {
+    font-size:clamp(25px,7vw,34px);
+    overflow-wrap:anywhere;
+  }
+
+  .nova-empty-state p {
+    width:100%;
+    overflow-wrap:anywhere;
+  }
+
+  .prompt-suggestions {
+    width:100%;
+    min-width:0;
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+  }
+
+  .prompt-suggestions button {
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    overflow-wrap:anywhere;
+  }
+
+  .message-meta {
+    flex-wrap:wrap;
+    min-width:0;
+    line-height:1.6;
+  }
+
+  .verification-pill {
+    max-width:100%;
+    overflow-wrap:anywhere;
+  }
+
+  .message-text,
+  .user-message-text {
+    min-width:0;
+    max-width:100%;
+    overflow-wrap:anywhere;
+  }
+
+  .message-text pre {
+    max-width:100%;
+    box-sizing:border-box;
+    overflow-x:auto;
+  }
+
+  .citation-card {
+    min-width:0;
+    overflow-wrap:anywhere;
+  }
+
+  .composer-bottom {
+    min-width:0;
+    flex-wrap:wrap;
+    row-gap:8px;
+  }
+
+  .composer-left {
+    flex:1 1 100%;
+    width:100%;
+    min-width:0;
+    flex-wrap:wrap;
+  }
+
+  .nova-composer textarea {
+    display:block;
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    box-sizing:border-box;
+    overflow-wrap:anywhere;
+  }
+
+  .send-button {
+    flex:0 0 auto;
+    margin-left:auto;
+  }
+
+  .privacy-note {
+    max-width:100%;
+    overflow-wrap:anywhere;
+  }
+}
+
+@media (max-width:480px) {
+  .workspace-heading h1 {
+    font-size:29px;
+  }
+
+  .nova-empty-state {
+    padding:20px 0;
+  }
+
+  .composer-bottom {
+    align-items:flex-start;
+  }
+
+  .composer-left {
+    gap:4px;
+  }
+
+  .message-meta {
+    gap:6px;
+  }
+}

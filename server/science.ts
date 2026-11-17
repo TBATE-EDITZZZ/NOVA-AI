@@ -100,8 +100,15 @@ export const novaRouter = router({
     .mutation(async ({ input, ctx }) => {
       const geminiApiKey = process.env.GEMINI_API_KEY;
       const openaiApiKey = process.env.OPENAI_API_KEY;
+      const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+      const cloudflareApiToken = process.env.CLOUDFLARE_API_TOKEN;
+      const cloudflareAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+      const groqApiKey = process.env.GROQ_API_KEY;
 
-      if (!geminiApiKey && !openaiApiKey) {
+      if (
+        !geminiApiKey && !openaiApiKey && !openrouterApiKey &&
+        !(cloudflareApiToken && cloudflareAccountId) && !groqApiKey
+      ) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "NOVA AI is not configured. Add GEMINI_API_KEY or OPENAI_API_KEY to protected environment settings.",
@@ -168,61 +175,25 @@ export const novaRouter = router({
 
       let answer = "";
       let usedModel = "";
-      let provider: "gemini" | "openai" = "gemini";
+      let provider: "openai" | "gemini" | "openrouter" | "cloudflare" | "groq" = "openai";
 
-      // PRIMARY: Gemini
-      if (geminiApiKey) {
+      const chatMessages: any[] = [
+        { role: "system", content: systemInstruction },
+        ...input.history.map(item => ({
+          role: item.role === "assistant" ? "assistant" : "user",
+          content: item.text,
+        })),
+        { role: "user", content: `${input.question}\n\n${sourceContext}` },
+      ];
+
+      // PRIMARY 1: OpenAI
+      if (openaiApiKey) {
         try {
-          const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
-
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-goog-api-key": geminiApiKey,
-              },
-              body: JSON.stringify({
-                systemInstruction: { parts: [{ text: systemInstruction }] },
-                contents,
-                generationConfig: {
-                  temperature: 0.35,
-                  maxOutputTokens: 1800,
-                },
-              }),
-              signal: AbortSignal.timeout(45000),
-            }
-          );
-
-          if (!response.ok) {
-            throw new Error(`Gemini HTTP ${response.status}`);
-          }
-
-          const body = await response.json() as {
-            candidates?: Array<{
-              content?: { parts?: Array<{ text?: string }> };
-            }>;
-          };
-
-          answer = body.candidates?.[0]?.content?.parts
-            ?.map(part => part.text ?? "")
-            .join("\n")
-            .trim() ?? "";
-
-          if (!answer) throw new Error("Gemini returned an empty answer.");
-
-          usedModel = model;
-          provider = "gemini";
-        } catch {
-          console.warn("[NOVA] Gemini failed. Trying OpenAI fallback.");
-        }
-      }
-
-      // BACKUP: OpenAI
-      if (!answer && openaiApiKey) {
-        try {
-          const client = new OpenAI({ apiKey: openaiApiKey });
+          const client = new OpenAI({
+            apiKey: openaiApiKey,
+            timeout: 45000,
+            maxRetries: 0,
+          });
           const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
           const openAIInput: any[] = input.history.map(item => ({
@@ -230,16 +201,13 @@ export const novaRouter = router({
             content: [{ type: "input_text", text: item.text }],
           }));
 
-          const currentContent: Array<Record<string, string>> = [
-            {
-              type: "input_text",
-              text: `${input.question}\n\n${sourceContext}`,
-            },
-          ];
+          const currentContent: Array<Record<string, string>> = [{
+            type: "input_text",
+            text: `${input.question}\n\n${sourceContext}`,
+          }];
 
           if (input.attachment) {
-            const dataUrl =
-              `data:${input.attachment.mimeType};base64,${input.attachment.data}`;
+            const dataUrl = `data:${input.attachment.mimeType};base64,${input.attachment.data}`;
 
             if (input.attachment.mimeType === "application/pdf") {
               currentContent.push({
@@ -256,10 +224,7 @@ export const novaRouter = router({
             }
           }
 
-          openAIInput.push({
-            role: "user",
-            content: currentContent,
-          });
+          openAIInput.push({ role: "user", content: currentContent });
 
           const response = await client.responses.create({
             model,
@@ -269,20 +234,158 @@ export const novaRouter = router({
           });
 
           answer = response.output_text?.trim() ?? "";
-
-          if (!answer) throw new Error("OpenAI returned an empty answer.");
+          if (!answer) throw new Error("Empty OpenAI response.");
 
           usedModel = model;
           provider = "openai";
         } catch {
-          console.error("[NOVA] OpenAI fallback also failed.");
+          console.warn("[NOVA] OpenAI failed.");
+        }
+      }
+
+      // PRIMARY 2: Gemini
+      if (!answer && geminiApiKey) {
+        try {
+          const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
+
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": geminiApiKey,
+              },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+                contents,
+                generationConfig: { temperature: 0.35, maxOutputTokens: 1800 },
+              }),
+              signal: AbortSignal.timeout(45000),
+            }
+          );
+
+          if (!response.ok) throw new Error(`Gemini HTTP ${response.status}`);
+
+          const body = await response.json() as {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          };
+
+          answer = body.candidates?.[0]?.content?.parts
+            ?.map(part => part.text ?? "").join("\n").trim() ?? "";
+
+          if (!answer) throw new Error("Empty Gemini response.");
+
+          usedModel = model;
+          provider = "gemini";
+        } catch {
+          console.warn("[NOVA] Gemini failed.");
+        }
+      }
+
+      // PRIMARY 3: OpenRouter
+      if (!answer && !input.attachment && openrouterApiKey) {
+        try {
+          const model = process.env.OPENROUTER_MODEL || "openrouter/free";
+          const client = new OpenAI({
+            apiKey: openrouterApiKey,
+            baseURL: "https://openrouter.ai/api/v1",
+            timeout: 45000,
+            maxRetries: 0,
+          });
+
+          const response = await client.chat.completions.create({
+            model,
+            messages: chatMessages,
+            max_tokens: 1800,
+            temperature: 0.35,
+          });
+
+          const content = response.choices[0]?.message?.content;
+          answer = typeof content === "string" ? content.trim() : "";
+          if (!answer) throw new Error("Empty OpenRouter response.");
+
+          usedModel = model;
+          provider = "openrouter";
+        } catch {
+          console.warn("[NOVA] OpenRouter failed.");
+        }
+      }
+
+      // FALLBACK 1: Cloudflare Workers AI
+      if (!answer && !input.attachment && cloudflareApiToken && cloudflareAccountId) {
+        try {
+          const model = process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.1-8b-instruct";
+
+          const response = await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(cloudflareAccountId)}/ai/run/${encodeURIComponent(model)}`,
+            {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${cloudflareApiToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                messages: chatMessages,
+                max_tokens: 1800,
+                temperature: 0.35,
+              }),
+              signal: AbortSignal.timeout(45000),
+            }
+          );
+
+          if (!response.ok) throw new Error(`Cloudflare HTTP ${response.status}`);
+
+          const body = await response.json() as {
+            success?: boolean;
+            result?: { response?: string };
+          };
+
+          answer = body.result?.response?.trim() ?? "";
+          if (!answer) throw new Error("Empty Cloudflare response.");
+
+          usedModel = model;
+          provider = "cloudflare";
+        } catch {
+          console.warn("[NOVA] Cloudflare Workers AI failed.");
+        }
+      }
+
+      // FALLBACK 2: Groq
+      if (!answer && !input.attachment && groqApiKey) {
+        try {
+          const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+          const client = new OpenAI({
+            apiKey: groqApiKey,
+            baseURL: "https://api.groq.com/openai/v1",
+            timeout: 45000,
+            maxRetries: 0,
+          });
+
+          const response = await client.chat.completions.create({
+            model,
+            messages: chatMessages,
+            max_tokens: 1800,
+            temperature: 0.35,
+          });
+
+          const content = response.choices[0]?.message?.content;
+          answer = typeof content === "string" ? content.trim() : "";
+          if (!answer) throw new Error("Empty Groq response.");
+
+          usedModel = model;
+          provider = "groq";
+        } catch {
+          console.warn("[NOVA] Groq failed.");
         }
       }
 
       if (!answer) {
         throw new TRPCError({
           code: "BAD_GATEWAY",
-          message: "NOVA AI providers are currently unavailable. Check your Gemini and OpenAI configuration, model access, and API usage limits.",
+          message: input.attachment
+            ? "NOVA could not analyse this attachment. Check OpenAI and Gemini configuration."
+            : "NOVA AI providers are unavailable. Check API keys, model access, and usage limits.",
         });
       }
 

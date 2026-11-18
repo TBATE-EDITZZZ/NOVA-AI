@@ -1,6 +1,5 @@
 import "dotenv/config";
 import express from "express";
-import { createConnection } from "mysql2";
 import { createServer } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
@@ -8,45 +7,6 @@ import { publicPlatformScript } from "./publicConfig";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-
-async function checkDatabaseConnection() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    console.warn("[DB Test] DATABASE_URL is missing");
-    return;
-  }
-
-  let connection: ReturnType<typeof createConnection> | undefined;
-  try {
-    const url = new URL(connectionString);
-    connection = createConnection({
-      host: url.hostname,
-      port: Number(url.port || 4000),
-      user: decodeURIComponent(url.username),
-      password: decodeURIComponent(url.password),
-      database: decodeURIComponent(url.pathname.replace(/^\//, "")),
-      ssl: { minVersion: "TLSv1.2" },
-      connectTimeout: 15000,
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      connection!.connect(error => error ? reject(error) : resolve());
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      connection!.query("SELECT 1 AS connected", error =>
-        error ? reject(error) : resolve()
-      );
-    });
-
-    console.log("[DB Test] TiDB connection successful; SELECT 1 passed");
-  } catch (error) {
-    const code = (error as { code?: string }).code || "UNKNOWN_ERROR";
-    console.error("[DB Test] TiDB connection failed:", code);
-  } finally {
-    if (connection) connection.end();
-  }
-}
 
 async function startServer() {
   const app = express();
@@ -73,8 +33,6 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
-
-  await checkDatabaseConnection();
 
   const port = Number(process.env.PORT || "3000");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");
